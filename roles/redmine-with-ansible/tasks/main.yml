@@ -38,7 +38,6 @@
       - build-essential
       - curl
       - git
-      - libmariadb-dev
       - libmysqlclient-dev
     state: present
     update_cache: true
@@ -82,6 +81,7 @@
   become: true
   become_user: "{{ redmine_user }}"
   shell: |
+    echo $HOME
     export ASDF_DIR="$HOME/.asdf"
     . "$ASDF_DIR/asdf.sh"
     . "$ASDF_DIR/completions/asdf.bash"
@@ -97,41 +97,59 @@
     src: "database.yml.j2"
     dest: "{{ redmine_root_dir }}/config/database.yml"
 
-- name: Instalar dependencias con Bundler
-  become: true
-  become_user: "{{ redmine_user }}"
+- name: Se agrega Gemfile.local
+  ansible.builtin.copy:
+    mode: "0777"
+    dest: "{{ redmine_root_dir }}/Gemfile.local"
+    owner: redmine
+    group: www-data
+    content: |
+      gem 'puma'
+
+- name: Se deshabilita la carga de contenido estatico desde Puma
+  shell: |
+    sed -i "s/^  # config.public_file_server.enabled/  config.public_file_server.enabled/" config/environments/production.rb
+  args:
+    chdir: "{{ redmine_root_dir }}"
+    executable: /bin/bash
+
+- name: Se aplica configuración de bundle al proyecto Redmine
   shell: |
     /home/vagrant/.asdf/shims/bundle config set --local without "development test"
-    /home/vagrant/.asdf/shims/bundle install
+  become: false
   args:
     chdir: "{{ redmine_root_dir }}"
+    executable: /bin/bash
+
+- name: Instalar dependencias con Bundler
+  shell: |
+    bash -lc '/home/vagrant/.asdf/shims/bundle install'
+  become: false
+  args:
+    chdir: "{{ redmine_root_dir }}"
+    executable: /bin/bash
 
 - name: Generar secret token
-  become: true
-  become_user: "{{ redmine_user }}"
   shell: /home/vagrant/.asdf/shims/bundle exec rake generate_secret_token
+  become: false
   args:
     chdir: "{{ redmine_root_dir }}"
-    executable: /bin/bash
 
 - name: Ejecutar migraciones de base de datos
-  become: true
-  become_user: "{{ redmine_user }}"
-  shell: RAILS_ENV=production bundle exec rake db:migrate
+  shell: RAILS_ENV=production /home/vagrant/.asdf/shims/bundle exec rake db:migrate
+  become: false
   args:
     chdir: "{{ redmine_root_dir }}"
-    executable: /bin/bash
 
 - name: Cargar datos por defecto en español
-  become: true
-  become_user: "{{ redmine_user }}"
   shell: |
     echo "es" | RAILS_ENV=production /home/vagrant/.asdf/shims/bundle exec rake redmine:load_default_data
+  become: false
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
 
-- name: Se configura redmine.service 
+- name: Se configura redmine.service
   ansible.builtin.template:
     src: "redmine.service.j2"
     dest: "/etc/systemd/system/redmine.service"
@@ -144,3 +162,8 @@
     state: started
   become: true
 
+- name: Reiniar el servicio redmine.service
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: restarted
