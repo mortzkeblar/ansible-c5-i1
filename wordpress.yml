@@ -1,0 +1,62 @@
+---
+- name: Deploy WordPress
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    mysql_root_password: "superpassword"
+    mysql_host: "localhost"
+    mysql_db: "wpdb"
+    mysql_user: "wpdb"
+    mysql_password: "normalpassword"
+
+    vhost_port: 80
+    vhost_name: "wordpress.local"
+
+  roles:
+    - role: geerlingguy.mysql
+      vars:
+        mysql_databases:
+          - name: "{{ mysql_db }}"
+        mysql_users:
+          - name: "{{ mysql_user }}"
+            password: "{{ mysql_password }}"
+            priv: "{{ mysql_db }}.*:ALL"
+    - role: geerlingguy.nginx
+      vars:
+        nginx_vhosts:
+          - listen: "80"
+            server_name: "redmine.local"
+            server_name_redirect: "www.redmine.local"
+            root: "/var/www/redmine-6.0.6"
+            index: "index.php index.html index.htm"
+            access_log: "/var/log/redmine.access.log"
+            error_log: "/var/log/redmine.error.log"
+            state: "present"
+            filename: "redmine.local.conf"
+            extra_parameters: |
+              location / {
+                try_files $uri @app;
+                autoindex on;
+              }
+
+              location @app {
+                  proxy_pass http://localhost:3001;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              location ~* \.(ico|css|gif|jpe?g|png|js)(\?[0-9]+)?$ {
+                  expires max;
+                  break;
+              }
+
+              location = /500.html {
+                  root /var/www/html/redmine-6.0.6/public;
+              }
+
+    - role: redmine-with-ansible
+
