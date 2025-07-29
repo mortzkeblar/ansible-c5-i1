@@ -1,69 +1,74 @@
 ---
-- name: Crear usuario redmine
+
+- name: Crear grupo {{ redmine_group }}
+  ansible.builtin.group:
+    name: '{{ redmine_group }}'
+    state: present
+
+- name: Crear usuario {{ redmine_user }}
   ansible.builtin.user:
-    name: redmine 
-    shell: /bin/bash 
-    groups: users
+    name: '{{ redmine_user }}'
+    shell: '/bin/bash'
+    group: '{{ redmine_group }}'
     create_home: true
     state: present
 
-- name: Agregar el usuario {{ redmine_user }} al grupo www-data
-  ansible.builtin.user:
-    name: '{{ redmine_user }}'
-    groups: www-data
-    append: yes
-
 - name: Descargar Redmine
-  get_url:
+  ansible.builtin.get_url:
     url: '{{ redmine_url }}'
     dest: /tmp/redmine.tar.gz
+    mode: '0644'
 
-- name: Extraer Redmine en /opt/redmine-6.0.6
-  unarchive:
+- name: Extraer Redmine en {{ redmine_root_dir }}
+  ansible.builtin.unarchive:
     src: /tmp/redmine.tar.gz
     dest: "/opt"
-    remote_src: yes
+    remote_src: true
+    creates: '{{ redmine_root_dir }}'
 
-- name: Cambiar propietario, grupo y permisos de /opt/redmine-6.0.6
+- name: Cambiar propietario y grupo de {{ redmine_root_dir }}
   ansible.builtin.file:
     path: "{{ redmine_root_dir }}"
     owner: '{{ redmine_user }}'
-    group: www-data
-    mode: '0777'
-    recurse: yes
+    group: '{{ redmine_group }}'
+    recurse: true
 
 - name: Instalar paquetes básicos
-  apt:
+  ansible.builtin.apt:
     name:
+      - acl
       - build-essential
       - curl
       - git
       - libmariadb-dev
-      #- libmysqlclient-dev
+      # - libmysqlclient-dev
     state: present
     update_cache: true
 
 - name: Clonar asdf en el home de {{ redmine_user }}
   become: true
   become_user: '{{ redmine_user }}'
-  git:
+  ansible.builtin.git:
     repo: 'https://github.com/asdf-vm/asdf.git'
     dest: '/home/{{ redmine_user }}/.asdf'
     version: '{{ asdf_version }}'
 
 - name: Configurar bashrc para asdf
-  lineinfile:
+  become: true
+  become_user: '{{ redmine_user }}'
+  ansible.builtin.lineinfile:
     path: '/home/{{ redmine_user }}/.bashrc'
     line: '{{ item }}'
-    create: yes
+    create: true
+    owner: '{{ redmine_user }}'
+    group: '{{ redmine_group }}'
+    mode: '0755'
   loop:
     - '. "/home/{{ redmine_user }}/.asdf/asdf.sh"'
     - '. "/home/{{ redmine_user }}/.asdf/completions/asdf.bash"'
-  become: true
-  become_user: '{{ redmine_user }}'
 
 - name: Instalar dependencias para Ruby y Redmine
-  apt:
+  ansible.builtin.apt:
     name:
       - libssl-dev
       - libyaml-dev
@@ -81,9 +86,9 @@
 - name: Instalar plugin ruby en asdf y Ruby {{ ruby_version }}
   become: true
   become_user: "{{ redmine_user }}"
-  shell: |
+  ansible.builtin.shell: |
     echo $HOME
-    export ASDF_DIR="$HOME/.asdf"
+    export ASDF_DIR="/home/{{ redmine_user }}/.asdf"
     . "$ASDF_DIR/asdf.sh"
     . "$ASDF_DIR/completions/asdf.bash"
     asdf plugin add ruby || true
@@ -92,71 +97,108 @@
     gem install bundler
   args:
     executable: /bin/bash
+    creates: "/home/{{ redmine_user }}/.asdf/installs/ruby/{{ ruby_version }}"
+  environment:
+    PATH: "/home/{{ redmine_user }}/.asdf/bin/:{{ ansible_env.PATH }}"
 
 - name: Se configura database.yml en Redmine
   ansible.builtin.template:
     src: "database.yml.j2"
     dest: "{{ redmine_root_dir }}/config/database.yml"
+    owner: '{{ redmine_user }}'
+    group: '{{ redmine_group }}'
+    mode: '0755'
 
-- name: Se deshabilita la carga de contenido estatico desde Puma
-  shell: |
-    sed -i "s/^  # config.public_file_server.enabled/  config.public_file_server.enabled/" config/environments/production.rb
-  args:
-    chdir: "{{ redmine_root_dir }}"
-    executable: /bin/bash
+# - name: Se deshabilita la carga de contenido estatico desde Puma
+#  ansible.builtin.shell: |
+#    sed -i "s/^  # config.public_file_server.enabled/  config.public_file_server.enabled/" config/environments/production.rb
+#  args:
+#    chdir: "{{ redmine_root_dir }}"
+#    executable: /bin/bash
+
+- name: Descomentar config.public_file_server.enabled en production.rb
+  ansible.builtin.lineinfile:
+    path: "{{ redmine_root_dir }}/config/environments/production.rb"
+    regexp: '^\s*#\s*config\.public_file_server\.enabled\s*='
+    line: '  config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present?'
 
 - name: Se aplica configuración de bundle al proyecto Redmine
-  shell: |
-    /home/vagrant/.asdf/shims/bundle config set --local without "development test"
-  become: false
+  become: true
+  become_user: '{{ redmine_user }}'
+  ansible.builtin.shell: |
+    /home/{{ redmine_user }}/.asdf/shims/bundle config set --local without "development test"
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
+  changed_when: false
 
 - name: Se agrega Gemfile.local
   ansible.builtin.copy:
-    mode: "0777"
+    mode: "0755"
     dest: "{{ redmine_root_dir }}/Gemfile.local"
-    owner: redmine
-    group: www-data
+    owner: '{{ redmine_user }}'
+    group: '{{ redmine_group }}'
     content: |
       gem 'puma'
 
 - name: Instalar dependencias con Bundler
-  shell: |
+  become: true
+  become_user: '{{ redmine_user }}'
+  ansible.builtin.shell: |
     echo $PATH
-    bash -lc 'PATH=$PATH:/home/vagrant/.asdf/bin && /home/vagrant/.asdf/shims/bundle install'
-  become: false
+    bash -lc 'PATH=$PATH:/home/{{ redmine_user }}/.asdf/bin && /home/{{ redmine_user }}/.asdf/shims/bundle install'
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
+    creates: "{{ redmine_root_dir }}/Gemfile.lock"
 
 - name: Generar secret token
   become: true
-  become_user: "{{ redmine_user }}"
-  shell: /home/ubuntu/.asdf/shims/bundle exec rake generate_secret_token
+  become_user: '{{ redmine_user }}'
+  ansible.builtin.shell: |
+    /home/{{ redmine_user }}/.asdf/shims/bundle exec rake generate_secret_token
   args:
     chdir: "{{ redmine_root_dir }}"
+    creates: "{{ redmine_root_dir }}/config/initializers/secret_token.rb"
 
-- name: Ejecutar migraciones de base de datos
+
+- name: Verificar migraciones pendientes
   become: true
   become_user: "{{ redmine_user }}"
-  shell: RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake db:migrate
+  ansible.builtin.shell: |
+    RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:abort_if_pending_migrations
   args:
     chdir: "{{ redmine_root_dir }}"
+  register: migrations_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Ejecutar migraciones pendientes
+  become: true
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.shell: |
+    RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:migrate
+  args:
+    chdir: "{{ redmine_root_dir }}"
+  changed_when: migrations_check.rc != 0
 
 - name: Cargar datos por defecto en español
+  become: true
   become_user: "{{ redmine_user }}"
-  shell: |
-    echo "es" | RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake redmine:load_default_data
+  ansible.builtin.shell: |
+    RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake redmine:load_default_data <<< "es"
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
+  changed_when: false
 
 - name: Se configura redmine.service
   ansible.builtin.template:
     src: "redmine.service.j2"
     dest: "/etc/systemd/system/redmine.service"
+    owner: root
+    group: root
+    mode: '0644'
   notify: Reload systemd
 
 - name: Iniciar el servicio redmine.service
@@ -164,10 +206,4 @@
     name: redmine.service
     enabled: true
     state: started
-  become: true
-
-- name: Reiniar el servicio nginx.service
-  ansible.builtin.systemd:
-    name: nginx
-    enabled: true
-    state: restarted
+  notify: Restart nginx

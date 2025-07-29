@@ -58,4 +58,6 @@
               }
 
     - role: redmine-with-ansible
-
+      vars:
+        redmine_user: "redmine"
+        redmine_group: "redmine"

@@ -1,4 +1,10 @@
+---
 - name: Reload systemd
-  ansible.builtin.command: systemctl daemon-reexec
-  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
 
+- name: Restart nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
+  changed_when: false
