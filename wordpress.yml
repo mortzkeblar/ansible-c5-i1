@@ -1,5 +1,5 @@
 ---
-- name: Deploy WordPress
+- name: Provisioning Redmine
   hosts: all
   become: true
   gather_facts: true
@@ -58,4 +58,7 @@
               }
 
     - role: redmine-with-ansible
+      vars:
+        redmine_user: "ubuntu"
+        redmine_group: "ubuntu"
 

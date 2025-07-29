@@ -7,9 +7,9 @@
     create_home: true
     state: present
 
-- name: Agregar el usuario vagrant al grupo www-data
+- name: Agregar el usuario {{ redmine_user }} al grupo www-data
   ansible.builtin.user:
-    name: vagrant
+    name: '{{ redmine_user }}'
     groups: www-data
     append: yes
 
@@ -27,7 +27,7 @@
 - name: Cambiar propietario, grupo y permisos de /opt/redmine-6.0.6
   ansible.builtin.file:
     path: "{{ redmine_root_dir }}"
-    owner: redmine
+    owner: '{{ redmine_user }}'
     group: www-data
     mode: '0777'
     recurse: yes
@@ -38,28 +38,29 @@
       - build-essential
       - curl
       - git
-      - libmysqlclient-dev
+      - libmariadb-dev
+      #- libmysqlclient-dev
     state: present
     update_cache: true
 
-- name: Clonar asdf en el home de vagrant
+- name: Clonar asdf en el home de {{ redmine_user }}
   become: true
-  become_user: vagrant
+  become_user: '{{ redmine_user }}'
   git:
     repo: 'https://github.com/asdf-vm/asdf.git'
-    dest: '/home/vagrant/.asdf'
+    dest: '/home/{{ redmine_user }}/.asdf'
     version: '{{ asdf_version }}'
 
 - name: Configurar bashrc para asdf
   lineinfile:
-    path: /home/vagrant/.bashrc
+    path: '/home/{{ redmine_user }}/.bashrc'
     line: '{{ item }}'
     create: yes
   loop:
-    - '. "/home/vagrant/.asdf/asdf.sh"'
-    - '. "/home/vagrant/.asdf/completions/asdf.bash"'
+    - '. "/home/{{ redmine_user }}/.asdf/asdf.sh"'
+    - '. "/home/{{ redmine_user }}/.asdf/completions/asdf.bash"'
   become: true
-  become_user: vagrant
+  become_user: '{{ redmine_user }}'
 
 - name: Instalar dependencias para Ruby y Redmine
   apt:
@@ -131,21 +132,23 @@
     executable: /bin/bash
 
 - name: Generar secret token
-  shell: /home/vagrant/.asdf/shims/bundle exec rake generate_secret_token
-  become: false
+  become: true
+  become_user: "{{ redmine_user }}"
+  shell: /home/ubuntu/.asdf/shims/bundle exec rake generate_secret_token
   args:
     chdir: "{{ redmine_root_dir }}"
 
 - name: Ejecutar migraciones de base de datos
-  shell: RAILS_ENV=production /home/vagrant/.asdf/shims/bundle exec rake db:migrate
-  become: false
+  become: true
+  become_user: "{{ redmine_user }}"
+  shell: RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake db:migrate
   args:
     chdir: "{{ redmine_root_dir }}"
 
 - name: Cargar datos por defecto en español
+  become_user: "{{ redmine_user }}"
   shell: |
-    echo "es" | RAILS_ENV=production /home/vagrant/.asdf/shims/bundle exec rake redmine:load_default_data
-  become: false
+    echo "es" | RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake redmine:load_default_data
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
@@ -163,7 +166,7 @@
     state: started
   become: true
 
-- name: Reiniar el servicio redmine.service
+- name: Reiniar el servicio nginx.service
   ansible.builtin.systemd:
     name: nginx
     enabled: true

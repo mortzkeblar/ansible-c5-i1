@@ -7,7 +7,7 @@ User= {{ redmine_user }}
 Group= {{ redmine_group }}
 WorkingDirectory={{ redmine_root_dir }}
 Environment=RAILS_ENV=production
-ExecStart=/home/vagrant/.asdf/shims/bundle exec rails server -e production -b 0.0.0.0 -p 3001
+ExecStart=/home/{{ redmine_user }}/.asdf/shims/bundle exec rails server -e production -b 0.0.0.0 -p 3001
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=10
