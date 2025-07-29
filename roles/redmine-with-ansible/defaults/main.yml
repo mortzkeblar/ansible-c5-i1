@@ -1,6 +1,6 @@
 asdf_version: "v0.15.0"
 ruby_version: "3.3.0"
-redmine_user: "vagrant"
-redmine_group: "www-data"
+redmine_user: "redmine"
+redmine_group: "redmine"
 redmine_url: "https://www.redmine.org/releases/redmine-6.0.6.tar.gz"
 redmine_root_dir: "/opt/redmine-6.0.6"
