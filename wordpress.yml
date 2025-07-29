@@ -61,4 +61,5 @@
     - role: redmine-with-ansible
       vars:
         redmine_user: "ubuntu"
+        redmine_group: "ubuntu"
 
