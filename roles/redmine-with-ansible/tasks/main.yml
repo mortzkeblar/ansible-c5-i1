@@ -1,4 +1,5 @@
 ---
+
 - name: Crear grupo {{ redmine_group }}
   ansible.builtin.group:
     name: '{{ redmine_group }}'
@@ -7,8 +8,8 @@
 - name: Crear usuario {{ redmine_user }}
   ansible.builtin.user:
     name: '{{ redmine_user }}'
-    shell: /bin/bash 
-    groups: '{{ redmine_group }}'
+    shell: '/bin/bash'
+    group: '{{ redmine_group }}'
     create_home: true
     state: present
 
@@ -18,20 +19,19 @@
     dest: /tmp/redmine.tar.gz
     mode: '0644'
 
-- name: Extraer Redmine en {{ redmine_root_dir }} 
+- name: Extraer Redmine en {{ redmine_root_dir }}
   ansible.builtin.unarchive:
     src: /tmp/redmine.tar.gz
     dest: "/opt"
-    remote_src: yes
+    remote_src: true
     creates: '{{ redmine_root_dir }}'
 
-- name: Cambiar propietario, grupo y permisos de {{ redmine_root_dir }}
+- name: Cambiar propietario y grupo de {{ redmine_root_dir }}
   ansible.builtin.file:
     path: "{{ redmine_root_dir }}"
     owner: '{{ redmine_user }}'
     group: '{{ redmine_group }}'
-    mode: '0755'
-    #recurse: yes
+    recurse: true
 
 - name: Instalar paquetes básicos
   ansible.builtin.apt:
@@ -59,7 +59,10 @@
   ansible.builtin.lineinfile:
     path: '/home/{{ redmine_user }}/.bashrc'
     line: '{{ item }}'
-    create: yes
+    create: true
+    owner: '{{ redmine_user }}'
+    group: '{{ redmine_group }}'
+    mode: '0755'
   loop:
     - '. "/home/{{ redmine_user }}/.asdf/asdf.sh"'
     - '. "/home/{{ redmine_user }}/.asdf/completions/asdf.bash"'
@@ -102,6 +105,9 @@
   ansible.builtin.template:
     src: "database.yml.j2"
     dest: "{{ redmine_root_dir }}/config/database.yml"
+    owner: '{{ redmine_user }}'
+    group: '{{ redmine_group }}'
+    mode: '0755'
 
 #- name: Se deshabilita la carga de contenido estatico desde Puma
 #  ansible.builtin.shell: |
@@ -127,7 +133,7 @@
 
 - name: Se agrega Gemfile.local
   ansible.builtin.copy:
-    mode: "0777"
+    mode: "0755"
     dest: "{{ redmine_root_dir }}/Gemfile.local"
     owner: '{{ redmine_user }}'
     group: '{{ redmine_group }}'
@@ -143,20 +149,37 @@
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
+    creates: "{{ redmine_root_dir }}/Gemfile.lock"
 
 - name: Generar secret token
   become: true
   become_user: '{{ redmine_user }}'
-  ansible.builtin.shell: /home/{{ redmine_user }}/.asdf/shims/bundle exec rake generate_secret_token
+  ansible.builtin.shell: |
+    /home/{{ redmine_user }}/.asdf/shims/bundle exec rake generate_secret_token
   args:
     chdir: "{{ redmine_root_dir }}"
+    creates: "{{ redmine_root_dir }}/config/initializers/secret_token.rb"
 
-- name: Ejecutar migraciones de base de datos
+
+- name: Verificar migraciones pendientes
   become: true
   become_user: "{{ redmine_user }}"
-  ansible.builtin.shell: RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:migrate
+  ansible.builtin.shell: |
+    RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:abort_if_pending_migrations
   args:
     chdir: "{{ redmine_root_dir }}"
+  register: migrations_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Ejecutar migraciones pendientes
+  become: true
+  become_user: "{{ redmine_user }}"
+  ansible.builtin.shell: |
+    RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:migrate
+  args:
+    chdir: "{{ redmine_root_dir }}"
+  when: migrations_check.rc != 0
 
 - name: Cargar datos por defecto en español
   become: true
@@ -171,6 +194,9 @@
   ansible.builtin.template:
     src: "redmine.service.j2"
     dest: "/etc/systemd/system/redmine.service"
+    owner: root
+    group: root
+    mode: '0644'
   notify: Reload systemd
 
 - name: Iniciar el servicio redmine.service
@@ -178,9 +204,10 @@
     name: redmine.service
     enabled: true
     state: started
+  notify: Restart nginx
 
-- name: Reiniar el servicio nginx.service
-  ansible.builtin.systemd:
-    name: nginx
-    enabled: true
-    state: restarted
+#- name: Reiniar el servicio nginx.service
+#  ansible.builtin.systemd:
+#    name: nginx
+#    enabled: true
+#    state: restarted
