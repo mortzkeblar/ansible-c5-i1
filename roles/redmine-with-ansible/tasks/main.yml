@@ -179,7 +179,7 @@
     RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:migrate
   args:
     chdir: "{{ redmine_root_dir }}"
-  when: migrations_check.rc != 0
+  changed_when: migrations_check.rc != 0
 
 - name: Cargar datos por defecto en español
   become: true
@@ -205,9 +205,3 @@
     enabled: true
     state: started
   notify: Restart nginx
-
-#- name: Reiniar el servicio nginx.service
-#  ansible.builtin.systemd:
-#    name: nginx
-#    enabled: true
-#    state: restarted
