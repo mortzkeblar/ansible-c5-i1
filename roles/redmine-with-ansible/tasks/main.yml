@@ -41,7 +41,7 @@
       - curl
       - git
       - libmariadb-dev
-      #- libmysqlclient-dev
+      # - libmysqlclient-dev
     state: present
     update_cache: true
 
@@ -109,7 +109,7 @@
     group: '{{ redmine_group }}'
     mode: '0755'
 
-#- name: Se deshabilita la carga de contenido estatico desde Puma
+# - name: Se deshabilita la carga de contenido estatico desde Puma
 #  ansible.builtin.shell: |
 #    sed -i "s/^  # config.public_file_server.enabled/  config.public_file_server.enabled/" config/environments/production.rb
 #  args:
@@ -119,8 +119,8 @@
 - name: Descomentar config.public_file_server.enabled en production.rb
   ansible.builtin.lineinfile:
     path: "{{ redmine_root_dir }}/config/environments/production.rb"
-    regexp: '^  # config\.public_file_server\.enabled'
-    line: '  config.public_file_server.enabled'
+    regexp: '^\s*#\s*config\.public_file_server\.enabled\s*='
+    line: '  config.public_file_server.enabled = ENV["RAILS_SERVE_STATIC_FILES"].present?'
 
 - name: Se aplica configuración de bundle al proyecto Redmine
   become: true
