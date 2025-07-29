@@ -16,6 +16,7 @@
   ansible.builtin.get_url:
     url: '{{ redmine_url }}'
     dest: /tmp/redmine.tar.gz
+    mode: '0644'
 
 - name: Extraer Redmine en {{ redmine_root_dir }} 
   ansible.builtin.unarchive:
@@ -33,7 +34,7 @@
     #recurse: yes
 
 - name: Instalar paquetes básicos
-  apt:
+  ansible.builtin.apt:
     name:
       - acl
       - build-essential
@@ -45,16 +46,17 @@
     update_cache: true
 
 - name: Clonar asdf en el home de {{ redmine_user }}
-  #become: true
+  become: true
   become_user: '{{ redmine_user }}'
-  git:
+  ansible.builtin.git:
     repo: 'https://github.com/asdf-vm/asdf.git'
     dest: '/home/{{ redmine_user }}/.asdf'
     version: '{{ asdf_version }}'
 
 - name: Configurar bashrc para asdf
+  become: true
   become_user: '{{ redmine_user }}'
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: '/home/{{ redmine_user }}/.bashrc'
     line: '{{ item }}'
     create: yes
@@ -63,7 +65,7 @@
     - '. "/home/{{ redmine_user }}/.asdf/completions/asdf.bash"'
 
 - name: Instalar dependencias para Ruby y Redmine
-  apt:
+  ansible.builtin.apt:
     name:
       - libssl-dev
       - libyaml-dev
@@ -79,8 +81,9 @@
     state: present
 
 - name: Instalar plugin ruby en asdf y Ruby {{ ruby_version }}
+  become: true
   become_user: "{{ redmine_user }}"
-  shell: |
+  ansible.builtin.shell: |
     echo $HOME
     export ASDF_DIR="/home/{{ redmine_user }}/.asdf"
     . "$ASDF_DIR/asdf.sh"
@@ -91,6 +94,7 @@
     gem install bundler
   args:
     executable: /bin/bash
+    creates: "/home/{{ redmine_user }}/.asdf/installs/ruby/{{ ruby_version }}"
   environment:
     PATH: "/home/{{ redmine_user }}/.asdf/bin/:{{ ansible_env.PATH }}"
 
@@ -99,16 +103,23 @@
     src: "database.yml.j2"
     dest: "{{ redmine_root_dir }}/config/database.yml"
 
-- name: Se deshabilita la carga de contenido estatico desde Puma
-  shell: |
-    sed -i "s/^  # config.public_file_server.enabled/  config.public_file_server.enabled/" config/environments/production.rb
-  args:
-    chdir: "{{ redmine_root_dir }}"
-    executable: /bin/bash
+#- name: Se deshabilita la carga de contenido estatico desde Puma
+#  ansible.builtin.shell: |
+#    sed -i "s/^  # config.public_file_server.enabled/  config.public_file_server.enabled/" config/environments/production.rb
+#  args:
+#    chdir: "{{ redmine_root_dir }}"
+#    executable: /bin/bash
+
+- name: Descomentar config.public_file_server.enabled en production.rb
+  ansible.builtin.lineinfile:
+    path: "{{ redmine_root_dir }}/config/environments/production.rb"
+    regexp: '^  # config\.public_file_server\.enabled'
+    line: '  config.public_file_server.enabled'
 
 - name: Se aplica configuración de bundle al proyecto Redmine
+  become: true
   become_user: '{{ redmine_user }}'
-  shell: |
+  ansible.builtin.shell: |
     /home/{{ redmine_user }}/.asdf/shims/bundle config set --local without "development test"
   args:
     chdir: "{{ redmine_root_dir }}"
@@ -124,8 +135,9 @@
       gem 'puma'
 
 - name: Instalar dependencias con Bundler
+  become: true
   become_user: '{{ redmine_user }}'
-  shell: |
+  ansible.builtin.shell: |
     echo $PATH
     bash -lc 'PATH=$PATH:/home/{{ redmine_user }}/.asdf/bin && /home/{{ redmine_user }}/.asdf/shims/bundle install'
   args:
@@ -133,20 +145,23 @@
     executable: /bin/bash
 
 - name: Generar secret token
+  become: true
   become_user: '{{ redmine_user }}'
-  shell: /home/{{ redmine_user }}/.asdf/shims/bundle exec rake generate_secret_token
+  ansible.builtin.shell: /home/{{ redmine_user }}/.asdf/shims/bundle exec rake generate_secret_token
   args:
     chdir: "{{ redmine_root_dir }}"
 
 - name: Ejecutar migraciones de base de datos
+  become: true
   become_user: "{{ redmine_user }}"
-  shell: RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:migrate
+  ansible.builtin.shell: RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake db:migrate
   args:
     chdir: "{{ redmine_root_dir }}"
 
 - name: Cargar datos por defecto en español
+  become: true
   become_user: "{{ redmine_user }}"
-  shell: |
+  ansible.builtin.shell: |
     echo "es" | RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake redmine:load_default_data
   args:
     chdir: "{{ redmine_root_dir }}"

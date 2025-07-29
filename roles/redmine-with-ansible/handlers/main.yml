@@ -1,4 +1,5 @@
 - name: Reload systemd
   ansible.builtin.command: systemctl daemon-reexec
   become: true
+  changed_when: false
 
