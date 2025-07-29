@@ -3,11 +3,11 @@ Description=Puma HTTP Server for Redmine
 After=network.target
 
 [Service]
-User= {{ vagrant_user }}
-Group= {{ vagrant_group }}
+User= {{ redmine_user }}
+Group= {{ redmine_group }}
 WorkingDirectory=/opt/redmine
 Environment=RAILS_ENV=production
-ExecStart={{ ansible_env.HOME }}/.asdf/shims/bundle exec rails server -e production -b 0.0.0.0 -p 3001
+ExecStart=/home/{{ redmine_user }}/.asdf/shims/bundle exec rails server -e production -b 0.0.0.0 -p 3001
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=10
