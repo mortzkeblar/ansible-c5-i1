@@ -130,6 +130,7 @@
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
+  changed_when: false
 
 - name: Se agrega Gemfile.local
   ansible.builtin.copy:
@@ -185,10 +186,11 @@
   become: true
   become_user: "{{ redmine_user }}"
   ansible.builtin.shell: |
-    echo "es" | RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake redmine:load_default_data
+    RAILS_ENV=production /home/{{ redmine_user }}/.asdf/shims/bundle exec rake redmine:load_default_data <<< "es"
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
+  changed_when: false
 
 - name: Se configura redmine.service
   ansible.builtin.template:
