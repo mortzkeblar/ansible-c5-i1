@@ -117,7 +117,7 @@
 - name: Ejecutar migraciones de base de datos
   become: true
   become_user: "{{ redmine_user }}"
-  shell: RAILS_ENV=production bundle exec rake db:migrate
+  shell: RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake db:migrate
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
