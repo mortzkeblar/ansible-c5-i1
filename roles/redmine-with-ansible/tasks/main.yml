@@ -43,22 +43,22 @@
     state: present
     update_cache: true
 
-- name: Clonar asdf en el home de vagrant
+- name: Clonar asdf en el home de {{ redmine_user }}
   become: true
   become_user: '{{ redmine_user }}'
   git:
     repo: 'https://github.com/asdf-vm/asdf.git'
-    dest: '/home/vagrant/.asdf'
+    dest: '/home/{{ redmine_user }}/.asdf'
     version: '{{ asdf_version }}'
 
 - name: Configurar bashrc para asdf
   lineinfile:
-    path: /home/vagrant/.bashrc
+    path: '/home/{{ redmine_user }}/.bashrc'
     line: '{{ item }}'
     create: yes
   loop:
-    - '. "/home/vagrant/.asdf/asdf.sh"'
-    - '. "/home/vagrant/.asdf/completions/asdf.bash"'
+    - '. "/home/{{ redmine_user }}/.asdf/asdf.sh"'
+    - '. "/home/{{ redmine_user }}/.asdf/completions/asdf.bash"'
   become: true
   become_user: '{{ redmine_user }}'
 
@@ -101,15 +101,15 @@
   become: true
   become_user: "{{ redmine_user }}"
   shell: |
-    /home/vagrant/.asdf/shims/bundle config set --local without "development test"
-    /home/vagrant/.asdf/shims/bundle install
+    /home/ubuntu/.asdf/shims/bundle config set --local without "development test"
+    /home/ubuntu/.asdf/shims/bundle install
   args:
     chdir: "{{ redmine_root_dir }}"
 
 - name: Generar secret token
   become: true
   become_user: "{{ redmine_user }}"
-  shell: /home/vagrant/.asdf/shims/bundle exec rake generate_secret_token
+  shell: /home/ubuntu/.asdf/shims/bundle exec rake generate_secret_token
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
