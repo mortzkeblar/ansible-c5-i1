@@ -7,9 +7,9 @@
     create_home: true
     state: present
 
-- name: Agregar el usuario vagrant al grupo www-data
+- name: Agregar el usuario {{ redmine_user }} al grupo www-data
   ansible.builtin.user:
-    name: vagrant
+    name: '{{ redmine_user }}'
     groups: www-data
     append: yes
 
@@ -27,7 +27,7 @@
 - name: Cambiar propietario, grupo y permisos de /opt/redmine-6.0.6
   ansible.builtin.file:
     path: "{{ redmine_root_dir }}"
-    owner: redmine
+    owner: '{{ redmine_user }}'
     group: www-data
     mode: '0777'
     recurse: yes
@@ -39,13 +39,13 @@
       - curl
       - git
       - libmariadb-dev
-      - libmysqlclient-dev
+      #- libmysqlclient-dev
     state: present
     update_cache: true
 
 - name: Clonar asdf en el home de vagrant
   become: true
-  become_user: vagrant
+  become_user: '{{ redmine_user }}'
   git:
     repo: 'https://github.com/asdf-vm/asdf.git'
     dest: '/home/vagrant/.asdf'
@@ -60,7 +60,7 @@
     - '. "/home/vagrant/.asdf/asdf.sh"'
     - '. "/home/vagrant/.asdf/completions/asdf.bash"'
   become: true
-  become_user: vagrant
+  become_user: '{{ redmine_user }}'
 
 - name: Instalar dependencias para Ruby y Redmine
   apt:
@@ -126,7 +126,7 @@
   become: true
   become_user: "{{ redmine_user }}"
   shell: |
-    echo "es" | RAILS_ENV=production /home/vagrant/.asdf/shims/bundle exec rake redmine:load_default_data
+    echo "es" | RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake redmine:load_default_data
   args:
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
