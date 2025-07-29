@@ -58,4 +58,7 @@
               }
 
     - role: redmine-with-ansible
+      vars:
+        redmine_user: vagrant
+        redmine_group: vagrant
 
