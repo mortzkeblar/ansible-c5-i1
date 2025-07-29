@@ -82,6 +82,7 @@
   become: true
   become_user: "{{ redmine_user }}"
   shell: |
+    echo $HOME
     export ASDF_DIR="$HOME/.asdf"
     . "$ASDF_DIR/asdf.sh"
     . "$ASDF_DIR/completions/asdf.bash"
@@ -104,6 +105,14 @@
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
 
+- name: Se aplica configuración de bundle al proyecto Redmine
+  shell: |
+    /home/vagrant/.asdf/shims/bundle config set --local without "development test"
+  become: false
+  args:
+    chdir: "{{ redmine_root_dir }}"
+    executable: /bin/bash
+
 - name: Se agrega Gemfile.local
   ansible.builtin.copy:
     mode: "0777"
@@ -114,13 +123,13 @@
       gem 'puma'
 
 - name: Instalar dependencias con Bundler
-  become: true
-  become_user: "{{ redmine_user }}"
   shell: |
-    /home/ubuntu/.asdf/shims/bundle config set --local without "development test"
-    bash -lc 'PATH=$PATH:/home/ubuntu/.asdf/bin && /home/ubuntu/.asdf/shims/bundle install'
+    echo $PATH
+    bash -lc 'PATH=$PATH:/home/vagrant/.asdf/bin && /home/vagrant/.asdf/shims/bundle install'
+  become: false
   args:
     chdir: "{{ redmine_root_dir }}"
+    executable: /bin/bash
 
 - name: Generar secret token
   become: true
@@ -128,7 +137,6 @@
   shell: /home/ubuntu/.asdf/shims/bundle exec rake generate_secret_token
   args:
     chdir: "{{ redmine_root_dir }}"
-    executable: /bin/bash
 
 - name: Ejecutar migraciones de base de datos
   become: true
@@ -136,10 +144,8 @@
   shell: RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake db:migrate
   args:
     chdir: "{{ redmine_root_dir }}"
-    executable: /bin/bash
 
 - name: Cargar datos por defecto en español
-  become: true
   become_user: "{{ redmine_user }}"
   shell: |
     echo "es" | RAILS_ENV=production /home/ubuntu/.asdf/shims/bundle exec rake redmine:load_default_data
@@ -147,7 +153,7 @@
     chdir: "{{ redmine_root_dir }}"
     executable: /bin/bash
 
-- name: Se configura redmine.service 
+- name: Se configura redmine.service
   ansible.builtin.template:
     src: "redmine.service.j2"
     dest: "/etc/systemd/system/redmine.service"

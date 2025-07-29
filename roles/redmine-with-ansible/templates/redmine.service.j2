@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User= {{ redmine_user }}
 Group= {{ redmine_group }}
-WorkingDirectory=/opt/redmine-6.0.6
+WorkingDirectory={{ redmine_root_dir }}
 Environment=RAILS_ENV=production
 ExecStart=/home/{{ redmine_user }}/.asdf/shims/bundle exec rails server -e production -b 0.0.0.0 -p 3001
 Restart=always
