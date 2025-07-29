@@ -102,7 +102,7 @@
   become_user: "{{ redmine_user }}"
   shell: |
     /home/ubuntu/.asdf/shims/bundle config set --local without "development test"
-    /home/ubuntu/.asdf/shims/bundle install
+    bash -lc 'PATH=$PATH:/home/ubuntu/.asdf/bin && /home/ubuntu/.asdf/shims/bundle install'
   args:
     chdir: "{{ redmine_root_dir }}"
 
